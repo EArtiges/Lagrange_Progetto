@@ -14,7 +14,10 @@ import string
 from skimage import data
 from skimage import filters
 from skimage import exposure
-
+import numpy as np
+from scipy import ndimage
+import matplotlib.pylab as pylab
+pylab.rcParams['figure.figsize'] = 8, 6
 
 def geo_plot(A,Grid,colors):
     #The file we got from the geoportale is in Gauss-Boaga projection. its EPSG code is 3003 but it does not know it.
@@ -25,7 +28,7 @@ def geo_plot(A,Grid,colors):
     #df.to_crs(epsg=4326).plot()#.to_crs({'proj': 'merc'}).plot()
 
     topic1=pd.DataFrame(index=Grid)
-    for i in range(len(A.T)):
+    for i in xrange(len(A.T)):
         data=list(A.T[i])
         Norm_factor=np.sqrt(sum([d**2 for d in data]))
         data=[d/Norm_factor for d in data]
@@ -41,7 +44,7 @@ def geo_plot(A,Grid,colors):
     TOP1 = geopandas.GeoDataFrame(topic1, geometry=points)
     TOP1.crs = {'init': 'epsg:4326', 'no_defs': True}
 
-    for i in range(17):
+    for i in xrange(17):
         fig, ax = plt.subplots(1, figsize=(10, 10))
         vmin, vmax= min(TOP1['data{}'.format(i)].tolist()),max(TOP1['data{}'.format(i)].tolist())
         df.to_crs(epsg=4326).plot(linewidth=0.01, ax=ax, edgecolor='gray', color='white')
@@ -111,8 +114,8 @@ def geo_plot_one(row,Grid,colors,topic,save=False,folder='',shapefile='carta_sin
     cbar = fig.colorbar(sm,shrink=.5)
     plt.show()
     if save:
-        print('file saved', folder+'_'.join(topic.split(' ')))
-        fig.savefig(folder+'_'.join(topic.split(' '))+'.pdf')
+        print 'file saved', folder+string.join(topic.split(' '),'_')
+        fig.savefig(folder+string.join(topic.split(' '),'_')+'.pdf')
     plt.close()
     
 def geo_hm_one(row,Grid,colors,topic,save=False,folder='',shapefile='carta_sintesi_geo/carta_sintesi_geo.shp'):
@@ -130,9 +133,9 @@ def geo_hm_one(row,Grid,colors,topic,save=False,folder='',shapefile='carta_sinte
     Norm_factor=np.sqrt(sum([d**2 for d in data]))
     data=[d/Norm_factor for d in data]
     if not type(Grid[0])==shapely.geometry.point.Point:
-        coord_data=list(zip([Point(a[1],a[0]) for a in Grid],[d**2 for d in data]))
+        coord_data=zip([Point(a[1],a[0]) for a in Grid],[d**2 for d in data])
     else:
-        coord_data=list(zip(Grid,data))
+        coord_data=zip(Grid,data)
     by_ngh=[0 for n in neighbourhoods]
     for n in neighbourhoods:
         for c in coord_data:
@@ -166,7 +169,7 @@ def geo_hm_one(row,Grid,colors,topic,save=False,folder='',shapefile='carta_sinte
     cbar = fig.colorbar(sm,shrink=.5)
     plt.show()
     if save:
-        print('file saved', folder+string.join(topic.split(' '),'_'))
+        print 'file saved', folder+string.join(topic.split(' '),'_')
         fig.savefig(folder+string.join(topic.split(' '),'_')+'_hm.pdf')
     plt.close()
 
@@ -185,9 +188,9 @@ def geo_hm_one_2(row,Grid,colors,topic,ax,save=False,folder='',shapefile='carta_
     Norm_factor=np.sqrt(sum([d**2 for d in data if str(d)!='nan']))
     data=[d/Norm_factor for d in data]
     if not type(Grid[0])==shapely.geometry.point.Point:
-        coord_data=list(zip([Point(a[1],a[0]) for a in Grid],[d**2 for d in data]))
+        coord_data=zip([Point(a[1],a[0]) for a in Grid],[d**2 for d in data])
     else:
-        coord_data=list(zip(Grid,data))
+        coord_data=zip(Grid,data)
     by_ngh=[0 for n in neighbourhoods]
     for n in neighbourhoods:
         for c in coord_data:
@@ -198,16 +201,16 @@ def geo_hm_one_2(row,Grid,colors,topic,ax,save=False,folder='',shapefile='carta_
     vmax=max(by_ngh)
     by_ngh=np.array(by_ngh)
     val = filters.threshold_otsu(by_ngh)
-    print('otsu threshold', val)
+    print 'otsu threshold', val
     by_ngh=np.ma.masked_where(by_ngh<val,by_ngh)
     topic1['data'] = pd.Series(by_ngh, index=neighbourhoods)
     #Our coordinates are in the usual WGS84 encoding (i.e. EPSG: 4326).
     TOP1 = geopandas.GeoDataFrame(topic1, geometry=neighbourhoods)
     TOP1.crs = {'init': 'epsg:4326', 'no_defs': True}
-    TOP1.dropna().to_crs(epsg=4326).plot(column='data', linewidth=0.5, ax=ax, edgecolor='gray', cmap=colors, alpha=1)
-
+    TOP1.dropna().to_crs(epsg=4326).plot(column='data', linewidth=0.5, ax=ax, edgecolor='gray', cmap=colors,alpha=.5)
     
-    def heatmap_2(d, cmap, smoothing=1.3):
+    
+def heatmap_2(d, cmap, smoothing=1.3):
     def getx(pt):
         return pt.coords[0][0]
 
@@ -237,8 +240,7 @@ def geo_hm_one_2(row,Grid,colors,topic,ax,save=False,folder='',shapefile='carta_
     val = filters.threshold_otsu(heatmap)
     print val
     heatmap = np.ma.masked_where(heatmap<val, heatmap)
-    #cmap=plt.cm.jet
-    #cmap=plt.cmap=plt.cm.get_cmap('Blues', 6)
+    cmap=plt.cm.jet
     cmap.set_bad(color='white')
     plt.imshow(heatmap, extent=extent,cmap=cmap,alpha=.5)
     plt.colorbar(shrink=.5)
