@@ -10,6 +10,10 @@ import Twitter_scraping as scraper
 import string
 import pickle as pkl
 import numpy as np
+from requests.exceptions import Timeout, ConnectionError
+from requests.packages.urllib3.exceptions import ReadTimeoutError
+import logging
+logging.basicConfig(filename='Twitter.log',level=logging.DEBUG)
 
 APP_KEY = 'ZIvxV0lZJnQI2FOuEqi0zzQqU'
 APP_SECRET = '28z7HZuCNX71NMc5TO8ga3woravEt5wFsvm7Z2Q7LERBpoSCno'
@@ -31,10 +35,14 @@ grid_str=[str(g[0])+','+str(g[1])+',0.25km' for g in Grid]
 print('queries')
 # Run the queries we want on the grid we choose
 statuses=[]
-for query in ['torino','san salvario','nizza','porta nuova','piazza castello','mole','vanchiglia','vanchiglietta','lingotto','san donato','borgo crimea','bordo po','santa rita','mirafiori','crocetta','cenisia']:
+for query in ['torino','san salvario','nizza']: #,'porta nuova','piazza castello','mole','vanchiglia','vanchiglietta','lingotto','san donato','borgo crimea','bordo po','santa rita','mirafiori','crocetta','cenisia']:
     for g in grid_str:
         last_id=None
-        search_parameters = dict(q=query , count = 100, max_id = last_id, geocode=g)
+        try:
+            search_parameters = dict(q=query , count = 70, max_id = last_id, geocode=g)
+        except (ReadTimeoutError, ConnectionError, ConnectionResetError, TwythonRateLimitError,OSError) as exc:
+            logging.exception("message")
+            continue
         print("Starting to query tweets")
         statuses+=scraper.query_by_word(search_parameters, twitter)
 
@@ -95,5 +103,13 @@ print(len(ID), 'users to scrape')
 
 for user_ID in ID:
     print("scraping user {}".format(user_ID))
-    df=scraper.get_user_timeline(user_ID,date_start,twitter)
-    df.to_pickle('USERS/dataframe_user_{}.pkl'.format(user_ID))
+    while(True):
+        try:
+            df=scraper.get_user_timeline(user_ID,date_start,twitter)
+            df.to_pickle('USERS/dataframe_user_{}.pkl'.format(user_ID))
+        except (ReadTimeoutError, ConnectionResetError, ConnectionError,TwythonRateLimitError,OSError) as exc:
+            logging.exception("message")
+            continue
+        break
+       
+

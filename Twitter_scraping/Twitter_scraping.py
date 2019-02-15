@@ -8,6 +8,10 @@ import twython
 from twython import TwythonRateLimitError
 import numpy as np
 import pickle as pkl
+from requests.exceptions import Timeout, ConnectionError
+from requests.packages.urllib3.exceptions import ReadTimeoutError
+import logging
+logging.basicConfig(filename='Twitter.log',level=logging.DEBUG)
 
 def query_by_word(search_parameters,twitter):
     searching = True
@@ -23,6 +27,9 @@ def query_by_word(search_parameters,twitter):
             result = twitter.search(**search_parameters)
         except TwythonRateLimitError:
             time.sleep(901)
+            continue
+        except (ReadTimeoutError, ConnectionResetError, ConnectionError,TwythonRateLimitError,OSError) as exc:
+            logging.exception("message")
             continue
         # add the statuses to a list
 #        print(len(result['statuses']), "tweets collected")
@@ -52,6 +59,9 @@ def get_user_timeline(user_ID,date_start,twitter):
             result = twitter.get_user_timeline(id = user_ID, count = 200, include_rts = True, max_id=last_id)
         except TwythonRateLimitError:
             time.sleep(901)
+            continue
+        except (ReadTimeoutError, ConnectionError, ConnectionResetError, TwythonRateLimitError,OSError) as exc:
+            logging.exception("message")
             continue
         if len(result) == 0:
             break
