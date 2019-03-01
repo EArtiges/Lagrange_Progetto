@@ -8,7 +8,7 @@ import twython
 from twython import TwythonRateLimitError
 import numpy as np
 import pickle as pkl
-from requests.exceptions import Timeout, ConnectionError
+from requests.exceptions import Timeout
 from requests.packages.urllib3.exceptions import ReadTimeoutError
 import logging
 logging.basicConfig(filename='Twitter.log',level=logging.DEBUG)
@@ -31,19 +31,32 @@ def query_by_word(search_parameters,twitter):
         except (ReadTimeoutError, ConnectionResetError, ConnectionError,TwythonRateLimitError,OSError) as exc:
             logging.exception("message")
             continue
+        except BaseException:
+            time.sleep(60)
+            continue
         # add the statuses to a list
 #        print(len(result['statuses']), "tweets collected")
         if len(result['statuses'])==0:
             break
         else:
+            print(len(result['statuses']))
             for status in result['statuses']:
-                status['query_loc']=search_parameters['geocode']
-                status['user']['query_loc']=search_parameters['geocode']
+                try:
+                    status['query_loc']=search_parameters['geocode']
+                    status['user']['query_loc']=search_parameters['geocode']
+                except KeyError:
+                    try:
+                        status['query_loc']=search_parameters['bounding_box']
+                        status['user']['query_loc']=search_parameters['bounding_box']
+                    except KeyError:
+                        status['query_loc']='n/a'
+                        status['user']['query_loc']='n/a'
                 statuses.append(status)
                 last_result = status
             # update max_id
         last_id = int(last_result['id_str']) - 1
         search_parameters['max_id']=last_id
+        break
     print(len(statuses), "tweets collected.")
     return statuses
 
@@ -63,6 +76,10 @@ def get_user_timeline(user_ID,date_start,twitter):
         except (ReadTimeoutError, ConnectionError, ConnectionResetError, TwythonRateLimitError,OSError) as exc:
             logging.exception("message")
             continue
+        except BaseException:
+            time.sleep(60)
+            continue
+
         if len(result) == 0:
             break
         # add the statuses to a list

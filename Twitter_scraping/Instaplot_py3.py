@@ -208,40 +208,40 @@ def geo_hm_one_2(row,Grid,colors,topic,ax,save=False,folder='',shapefile='carta_
 
     
     def heatmap_2(d, cmap, smoothing=1.3):
-    def getx(pt):
-        return pt.coords[0][0]
+        def getx(pt):
+            return pt.coords[0][0]
 
-    def gety(pt):
-        return pt.coords[0][1]
+        def gety(pt):
+            return pt.coords[0][1]
 
-    x = list(d.geometry.apply(getx))
-    y = list(d.geometry.apply(gety))
-    dat=d[d.columns[0]].tolist()
-    for i in xrange(len(dat)):
-        if str(dat[i])=='nan':
-            dat[i]=0
-    Norm=np.sqrt(sum([d**2 for d in dat]))
-    print Norm
-    dat=[d/Norm for d in dat]
-    absc=sorted(list(set(x)))
-    ordo=sorted(list(set(y)))
-    # Add the end of the last box
-    ordo.append(2*ordo[-1]-ordo[-2])
-    absc.append(2*absc[-1]-absc[-2])
-    #Build a heatmap that shows the NODES and not the BOXES; we have one extra box for each coordinate.
-    heatmap = np.zeros((len(absc)-1, len(ordo)-1))
-    for i in xrange(len(x)):
-        heatmap[ordo.index(y[i]),absc.index(x[i])]=dat[i]
-    extent = [min(absc), max(absc), max(ordo), min(ordo)]
-    heatmap = ndimage.filters.gaussian_filter(heatmap, smoothing, mode='nearest')   
-    val = filters.threshold_otsu(heatmap)
-    print val
-    heatmap = np.ma.masked_where(heatmap<val, heatmap)
-    #cmap=plt.cm.jet
-    #cmap=plt.cmap=plt.cm.get_cmap('Blues', 6)
-    cmap.set_bad(color='white')
-    plt.imshow(heatmap, extent=extent,cmap=cmap,alpha=.5)
-    plt.colorbar(shrink=.5)
-    plt.gca().invert_yaxis()
-    #plt.show()
-    print (len(set(y)),len(set(x)))
+        x = list(d.geometry.apply(getx))
+        y = list(d.geometry.apply(gety))
+        dat=d[d.columns[0]].tolist()
+        for i in xrange(len(dat)):
+            if str(dat[i])=='nan':
+                dat[i]=0
+        Norm=np.sqrt(sum([d**2 for d in dat]))
+        print(Norm)
+        dat=[d/Norm for d in dat]
+        absc=sorted(list(set(x)))
+        ordo=sorted(list(set(y)))
+        # Add the end of the last box
+        ordo.append(2*ordo[-1]-ordo[-2])
+        absc.append(2*absc[-1]-absc[-2])
+        #Build a heatmap that shows the NODES and not the BOXES; we have one extra box for each coordinate.
+        heatmap = np.zeros((len(absc)-1, len(ordo)-1))
+        for i in xrange(len(x)):
+            heatmap[ordo.index(y[i]),absc.index(x[i])]=dat[i]
+        extent = [min(absc), max(absc), max(ordo), min(ordo)]
+        heatmap = ndimage.filters.gaussian_filter(heatmap, smoothing, mode='nearest')   
+        val = filters.threshold_otsu(heatmap)
+        print(val)
+        heatmap = np.ma.masked_where(heatmap<val, heatmap)
+        #cmap=plt.cm.jet
+        #cmap=plt.cmap=plt.cm.get_cmap('Blues', 6)
+        cmap.set_bad(color='white')
+        plt.imshow(heatmap, extent=extent,cmap=cmap,alpha=.5)
+        plt.colorbar(shrink=.5)
+        plt.gca().invert_yaxis()
+        #plt.show()
+        print (len(set(y)),len(set(x)))

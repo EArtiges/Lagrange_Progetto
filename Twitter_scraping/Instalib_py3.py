@@ -582,6 +582,32 @@ def dataframe_classified(slices,df_new_index):
     df_classified['result'] = [s.strip() for s in series_list[0].str.cat(series_list[1:], sep=' ')]
     return df_classified
 
+def dataframe_classified_nobins(slices,df_new_index):
+    df_classified=pd.DataFrame()
+    for flag in slices:
+            #Select only the data corresponding to this month
+            df_sliced= df_new_index[(df_new_index['date']>=flag[0]) & (df_new_index['date']<=flag[1])]
+            gc.collect()
+            #Group the data by bin and join the text of all the posts grouped this way
+            print(flag[0].date(),flag[1].date(), len(set(df_sliced['text'].tolist())))
+            #try:
+            #    df_sliced['text'] = df_sliced['text'].transform(lambda x: ','.join(x))
+            #except ValueError as e:
+            #    print(repr(e))
+            #    continue
+            #drop the potential duplicates
+            # Some posts, at various dates, have the same text in them. We keep only the
+            # first occurence and discard the next ones.
+            df=(df_sliced[['text']].drop_duplicates())
+            #df.set_index('coordsbin', inplace=True)
+            df.rename(columns={"text": slices.index(flag)},inplace=True)
+            df_classified=df_classified.merge(df, how='outer', left_index=True,right_index=True)
+    df_classified.fillna(value='',inplace=True)
+    series_list = [df_classified[c] for c in df_classified.columns[:-1]]
+    # concatenate:
+    df_classified['result'] = [s.strip() for s in series_list[0].str.cat(series_list[1:], sep=' ')]
+    return df_classified
+
 def dataframe_sampled(df,start):
     #How many tweets this month?
     list_reviews_rest=df[start].tolist()
@@ -899,7 +925,7 @@ def df_seeding(df_classified, seed):
         Text=[e.split(',') for e in Text]
         New_text=[seeding(e, seed) for e in Text]
         All_seeded_text.append(New_text)
-        new_column = pd.Series([string.join(a,', ') for a in New_text], name=column, index=df.index)
+        new_column = pd.Series([', '.join(a) for a in New_text], name=column, index=df.index)
         df.update(new_column)
     for month in All_seeded_text:
         for Bin in month:
@@ -926,14 +952,14 @@ def df_expanded_seeding(df_classified, seed, model=None):
     All_seeded_text=0
     for column in df.columns:
         Text=df[column].tolist()
-        if (set(string.join(Text, ' ').split(' ')) & set(exp_seeds) == set([])):
+        if (set(' '.join(Text).split(' ')) & set(exp_seeds) == set([])):
             new_column = pd.Series(['' for a in Text], name=column, index=df.index)
             pass
         else:
             Text=[e.split(',') for e in Text]
             New_text=[expanded_seeding(e, exp_seeds) for e in Text]
             All_seeded_text+=sum([len([n for n in N if n!='']) for N in New_text])
-            new_column = pd.Series([string.join(a,', ') for a in New_text], name=column, index=df.index)
+            new_column = pd.Series([', '.join(a) for a in New_text], name=column, index=df.index)
         df.update(new_column)
     #All_seeded_text takes into account each column + the column results which is a sum of all other columns.
     #Therefore it is twice the number of tweets in the corpus.

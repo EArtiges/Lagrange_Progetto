@@ -544,6 +544,11 @@ def indexed_dataframe(df_new,step_lon,step_lat,number_lats):
     return df_new_index_cells, df_new_nodup2_cells
 
 def TimeFlags(start,stop,granularity,n_gran):
+    """Returns an array of datetime objects for each desired slice, spaced from n_gran granularity time units.
+    
+    granularity='months' or 'days'
+    n_gran=number of granularity unit between two slices.
+    """
     flags=[start]
     if granularity=='months':
         T_delta=relativedelta(months=n_gran)
@@ -561,7 +566,7 @@ def dataframe_classified(slices,df_new_index):
             df_sliced= df_new_index[(df_new_index['date']>=flag[0]) & (df_new_index['date']<=flag[1])]
             gc.collect()
             #Group the data by bin and join the text of all the posts grouped this way
-            print flag[0].date(),flag[1].date(), len(set(df_sliced['text'].tolist()))
+            print flag[0],flag[1], len(set(df_sliced['text'].tolist()))
             try:
                 df_sliced['text'] = df_sliced.groupby('coordsbin')['text'].transform(lambda x: ','.join(x))
             except ValueError, e:
@@ -572,7 +577,7 @@ def dataframe_classified(slices,df_new_index):
             # first occurence and discard the next ones.
             df=(df_sliced[['text','coordsbin']].drop_duplicates())
             df.set_index('coordsbin', inplace=True)
-            df.rename(columns={"text": slices.index(flag)},inplace=True)
+            df.rename(columns={"text": flag[0]},inplace=True)
             df_classified=df_classified.merge(df, how='outer', left_index=True,right_index=True)
     df_classified.fillna(value='',inplace=True)
     series_list = [df_classified[c] for c in df_classified.columns[:-1]]
@@ -609,8 +614,8 @@ def dataframe_sampled(df,start):
             df.update(new_column)
     return df
 
-def abs_to_yearmonth(month_abs,list_years):
-    year_month=str(min(list_years)+int((month_abs-month_abs%12)/12))+' '+str(month_abs%12+1)
+def abs_to_yearmonth(month_abs,list_years,month_start):
+    year_month=str(min(list_years)+int((month_abs)/12))+' '+str(month_abs%12+month_start)
     return pd.Timestamp(year_month)
 
 
@@ -628,7 +633,7 @@ def NTF_sampling(sampling,df_classified,flags,start,stop,path,vectorizer_new=0,v
     Data_CRS_global=[]
     Ncells=[]
     snapshots=df_classified.columns.tolist()[0:-1]
-    if start-stop >=0 or stop==0:
+    if start>=stop:
         print 'incorrect start and/or stop dates. performing NTF on whole passed dataset'
         stop=min(len(flags), len(snapshots))
         
@@ -702,6 +707,93 @@ def NTF_sampling(sampling,df_classified,flags,start,stop,path,vectorizer_new=0,v
         TermVectorsIndex[i]=TermVectorsIndex[i][::-1]
     return A,B,C,TermVectorsIndex,TermVectors,lambdas
 
+
+def NTF_sampling_24H(sampling,df_classified,flags,start,stop,path,vectorizer_new=0,vectorizer_s=0,n_topics=10,n_features=1000,matlab=False,monuments=False):
+    # Feed the vectorizer with all the words in the dataset. Counts is the tweet/term matrix.
+    # fit_transform: fit first (build the features list with the relevant words)
+    # then transform: build the tweet/term matrix with the relevant tokens.
+    if not vectorizer_new:
+        print 'No vectorizer defined. Returning None'
+        return None
+    if matlab:
+        name_matlab=path+'matlab/TorInst{}Matr'.format(n_features)
+    Coord_CRS_global=[]
+    Data_CRS_global=[]
+    Ncells=[]
+    snapshots=df_classified.columns.tolist()[0:-1]
+    if start>=stop:
+        print 'incorrect start and/or stop dates. performing NTF on whole passed dataset'
+        stop=min(len(flags), len(snapshots))
+        
+    #For every snapshot taken
+    ct=0
+    for month in snapshots:
+        ct+=1
+        print flags[snapshots.index(month)]
+        This_Month=df_classified[month].tolist()
+            #print len(list_reviews_rest), 'tagged cells for ', year_month
+
+        # Learn the vocabulary dictionary and return term-document matrix.
+        print len(This_Month)
+        counts = vectorizer_new.transform(This_Month)
+        #Transform a count matrix to a normalized tf-idf representation. 
+        #(i.e terms with frequencies too hi or lo are removed)
+        # Weights are indexed by (postID, term): weight
+        tfidf = TfidfTransformer().fit_transform(counts)
+        if matlab:
+            savemat(name_matlab+str(ct), {'tfidf':tfidf})
+        #print 'tfidf done:'
+        #print tfidf
+        C,D=IL.read_CRS_totensor(tfidf,n_features,snapshots.index(month)-flags.index(start))
+        #print 'C,D'#, C,D
+        Coord_CRS_global.append(C)
+        Data_CRS_global.append(D)
+        
+    triples=[]
+    triples_data=[]
+    #For every month in the timeline
+    for i in range(0,len(Coord_CRS_global)):
+        c=Coord_CRS_global[i]
+        # For every post in this month
+        for e in c:
+            #Add the non-zero elements coordinates
+            triples.append(e)
+
+    for d in Data_CRS_global:
+        for e in d:
+            triples_data.append(e)
+    triples=[list(i) for i in triples]
+    try:
+#        maxNcells=max([e[0] for e in triples])
+        maxNcells=len(df_classified[start])
+    except ValueError:
+        print 'no non-zero element. returning None'
+        print triples
+        
+    # Build a sktensor, which is ncp friendly. The dimensions have to be
+    # N_bins x n_features x N_months.
+    # N_months = len(Nposts) e.g, or len(Coord_CRS_global)
+    # N_posts_total=sum(Nposts)
+    X = sktensor.sptensor(tuple(list(np.asarray(triples).T)), triples_data, shape=(maxNcells, n_features, df_classified.shape[1]))
+    X_approx_ks = ncp.nonnegative_tensor_factorization(X, n_topics, method='anls_bpp')
+    A = X_approx_ks.U[0]
+    B = X_approx_ks.U[1]
+    C = X_approx_ks.U[2]
+    lambdas = X_approx_ks.lmbda
+
+    voc_vector={k:v for v,k in vectorizer_s.vocabulary_.iteritems()}
+    voc_serie=pd.Series(voc_vector)
+    TermVectors=[]
+    TermVectorsIndex=[]
+    for row in B.T:
+        row=list(row)
+        row = [(r,row.index(r)) for r in sorted(row)[::-1]]
+        TermVectors.append(set([voc_vector[e[1]] for e in row]))
+        TermVectorsIndex.append([(voc_vector[e[1]],e[0]) for e in row])
+    for i in range(0,len(TermVectorsIndex)):
+        TermVectorsIndex[i].sort(key=lambda tup:tup[1])
+        TermVectorsIndex[i]=TermVectorsIndex[i][::-1]
+    return A,B,C,TermVectorsIndex,TermVectors,lambdas
 
 def geo_heatmap(Coordinates, Nposts, save=False, filename='hm'):
     """Draws a folium heatmap based the histogram of the Coordinates variable. 

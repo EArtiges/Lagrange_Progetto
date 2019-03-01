@@ -12,6 +12,7 @@ import pickle as pkl
 import numpy as np
 from requests.exceptions import Timeout, ConnectionError
 from requests.packages.urllib3.exceptions import ReadTimeoutError
+
 import logging
 logging.basicConfig(filename='Twitter.log',level=logging.DEBUG)
 
@@ -30,18 +31,19 @@ Grid=[]
 for lat in sorted(latitudes):
     for lon in sorted(longitudes):
         Grid.append((lat,lon))
-grid_str=[str(g[0])+','+str(g[1])+',0.25km' for g in Grid]
+grid_str=[str(g[0])+','+str(g[1])+',0.35km' for g in Grid]
 
 print('queries')
 # Run the queries we want on the grid we choose
 statuses_all=[]
 user_loc_dict={}
-for query in ['torino','san salvario','nizza']: #,'porta nuova','piazza castello','mole','vanchiglia','vanchiglietta','lingotto','san donato','borgo crimea','bordo po','santa rita','mirafiori','crocetta','cenisia']:
+for query in ['']:
+#'torino','san salvario','nizza','porta nuova','piazza castello','mole','vanchiglia','vanchiglietta','lingotto','san donato','borgo crimea','bordo po','santa rita','mirafiori','crocetta','cenisia']:
     statuses=[]
     for g in grid_str:
         last_id=None
         try:
-            search_parameters = dict(q=query , count = 70, max_id = last_id, geocode=g)
+            search_parameters = dict(q=query , count = 100, max_id = last_id, geocode=g)
         except (ReadTimeoutError, ConnectionError, ConnectionResetError, TwythonRateLimitError,OSError) as exc:
             logging.exception("message")
             continue
@@ -83,9 +85,10 @@ for query in ['torino','san salvario','nizza']: #,'porta nuova','piazza castello
             user_loc_dict[e[0]]=[e[1]]
         else: 
             user_loc_dict[e[0]].append(e[1])
-    for e in user_loc_dict:
-        user_loc_dict[e]=scraper.spatial_profile(user_loc_dict[e])
-    
+
+for e in user_loc_dict:
+    user_loc_dict[e]=scraper.spatial_profile(user_loc_dict[e])
+        
 print('pickling dictionary')
 # Save the dicionary of users spatial profiles
 pkl.dump(user_loc_dict, open('user_loc_dict.pkl', 'wb'))

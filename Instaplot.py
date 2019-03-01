@@ -175,11 +175,11 @@ def geo_hm_one(row,Grid,colors,topic,save=False,folder='',shapefile='carta_sinte
 
 def geo_hm_one_2(row,Grid,colors,topic,ax,save=False,folder='',shapefile='carta_sintesi_geo/carta_sintesi_geo.shp'):
     #The file we got from the Torino website is in Gauss-Boaga projection. its EPSG code is 3003 but it does not know it.
+    #We have to tell it:
     df = geopandas.read_file(shapefile)
     df.crs={'init':'epsg:3003'}
     neighbourhoods=df.to_crs(epsg=4326).geometry.tolist()
-    #We have to tell it:
-    
+
     #And then to plot it in the usual GPS coordinates.
     #df.to_crs(epsg=4326).plot()#.to_crs({'proj': 'merc'}).plot()
 
@@ -207,7 +207,7 @@ def geo_hm_one_2(row,Grid,colors,topic,ax,save=False,folder='',shapefile='carta_
     #Our coordinates are in the usual WGS84 encoding (i.e. EPSG: 4326).
     TOP1 = geopandas.GeoDataFrame(topic1, geometry=neighbourhoods)
     TOP1.crs = {'init': 'epsg:4326', 'no_defs': True}
-    TOP1.dropna().to_crs(epsg=4326).plot(column='data', linewidth=0.5, ax=ax, edgecolor='gray', cmap=colors,alpha=.5)
+    TOP1.dropna().to_crs(epsg=4326).plot(column='data', linewidth=0.5, ax=ax, edgecolor='gray', cmap=colors,alpha=1)
     
     
 def heatmap_2(d, cmap, smoothing=1.3):
@@ -247,3 +247,48 @@ def heatmap_2(d, cmap, smoothing=1.3):
     plt.gca().invert_yaxis()
     #plt.show()
     print (len(set(y)),len(set(x)))
+    
+    
+    
+    
+def relevant_bins_to_ngbh(row,Grid,shapefile='zone_statistiche_geo/zone_statistiche_geo.shx'):
+    # The file we got from the Torino website is in Gauss-Boaga projection. its EPSG code is 3003 but it does not know it.
+    # We have to tell it:
+    df = geopandas.read_file(shapefile)
+    df.crs={'init':'epsg:3003'}
+    neighbourhoods=df.to_crs(epsg=4326).geometry.tolist()
+    
+    # My list of bin intensity for this particular topic; let's normalize.
+    data=list(row)
+    Norm_factor=np.sqrt(sum([d**2 for d in data if str(d)!='nan']))
+    data=[d/Norm_factor for d in data]
+    
+    # Pair the data points and the bins. 
+    if not type(Grid[0])==shapely.geometry.point.Point:
+        coord_data=zip([Point(a[1],a[0]) for a in Grid],[d**2 for d in data])
+    else:
+        coord_data=zip(Grid,data)
+        
+    #For each bin, if they fall in a given neighbourhood, their intensity will be added to those neighbourhoods.
+    ngh=[0 for n in neighbourhoods]
+    bins_ngh = [[n] for n in neighbourhoods]
+    for p,n in enumerate(neighbourhoods):
+        for i,c in enumerate(coord_data):
+            if str(c[1])!='nan':
+                if c[0].within(n):
+                    ngh[p]+=c[1]
+                    #keep track of the bins that fall in a given neighbourhood
+                    bins_ngh[p].append(i)
+                    
+    # Thresholding the values: neighbourhoods with a weak signal will be discarded.
+    vmin=min(ngh)
+    vmax=max(ngh)
+    val = filters.threshold_otsu(np.array(ngh))
+    print 'otsu threshold', val
+    #let's return a list of only the bins belonging to relevant neighbourhoods
+    relevant_bins_by_ngh={}
+    for a in ngh:
+        if a >= val:
+            relevant_bins_by_ngh[ngh.index(a)] = bins_ngh[ngh.index(a)]
+    return neighbourhoods, relevant_bins_by_ngh
+            
